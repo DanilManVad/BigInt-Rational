@@ -1,0 +1,679 @@
+#include <algorithm>
+#include <iostream>
+#include <vector>
+class BigInteger{
+ private:
+  std::vector <long long> numbers;
+  bool isNegative = false;
+
+  friend class Rational;
+ public:
+  int base = 1000000000;
+  BigInteger() = default;
+  BigInteger(int n) {
+    isNegative = n < 0;
+    n = (n < 0 ? -n: n);
+    if (n == 0) {
+      numbers.push_back(0);
+    }
+    while (n > 0) {
+      numbers.push_back(n % base);
+      n /= base;
+    }
+  }
+  void swap(BigInteger& n) {
+    std::swap(numbers, n.numbers);
+    std::swap(isNegative, n.isNegative);
+  }
+  BigInteger(const BigInteger& n) {
+    numbers = n.numbers;
+    isNegative = n.isNegative;
+  }
+  BigInteger& operator=(const BigInteger& n) {
+    BigInteger copy = n;
+    swap(copy);
+    return *this;
+  }
+  void delete_first_zero() {
+    while (numbers.back() == 0 && numbers.size() > 1) {
+      numbers.pop_back();
+    }
+    if (numbers.back() == 0) {
+      isNegative = false;
+    }
+  }
+  void increase(const BigInteger& b) {
+    int carry = 0;
+    for (size_t i=0; i < b.numbers.size() || carry; ++i) {
+      numbers[i] -= carry + (i < b.numbers.size() ? b.numbers[i] : 0);
+      carry = numbers[i] < 0;
+      if (carry)  numbers[i] += base;
+    }
+    this->delete_first_zero();
+  }
+  BigInteger& operator+=(const BigInteger& b) {
+    if (isNegative == b.isNegative) {
+      int carry = 0;
+      if (numbers.size() < b.numbers.size()) {
+        numbers.resize(b.numbers.size() + 1);
+      }
+      for (size_t i=0; i<std::max(numbers.size(),b.numbers.size()) || carry; ++i) {
+        numbers[i] += carry + (i < b.numbers.size() ? b.numbers[i] : 0);
+        carry = numbers[i] >= base;
+        if (carry)  numbers[i] -= base;
+      }
+      this->delete_first_zero();
+      return *this;
+    }
+    if (numbers.size() < b.numbers.size()) {
+      BigInteger copy = b;
+      swap(copy);
+      this->increase(copy);
+      return *this;
+    }
+    if (numbers.size() > b.numbers.size()) {
+      this->increase(b);
+      return *this;
+    }
+    for (int i = (int)(numbers.size() - 1); i >= 0; --i) {
+      if (numbers[i] <= b.numbers[i]) {
+        if (numbers[i] < b.numbers[i]) {
+          BigInteger copy = b;
+          swap(copy);
+          this->increase(copy);
+          return *this;
+        }
+      } else {
+        this->increase(b);
+        return *this;
+      }
+    }
+    this->increase(b);
+    return *this;
+  }
+  BigInteger& operator-=(const BigInteger& k) {
+    isNegative = !isNegative;
+    *this += k;
+    isNegative = !isNegative;
+    if (numbers.back() == 0) {
+      isNegative = false;
+    }
+    return *this;
+  }
+  void shift_right() {
+    if (numbers.empty()) {
+      numbers.push_back(0);
+      return;
+    }
+    numbers.push_back(numbers[numbers.size() - 1]);
+    for (size_t i = numbers.size() - 2; i > 0; --i) numbers[i] = numbers[i - 1];
+    numbers[0] = 0;
+  }
+  BigInteger& operator*=(const BigInteger& b) {
+    BigInteger c;
+    if (isNegative != b.isNegative) {
+      c.isNegative = true;
+    }
+    c.numbers.resize(numbers.size() + b.numbers.size(), 0);
+    for (size_t i=0; i<numbers.size(); ++i)
+      for (int j=0, carry=0; j<(int)b.numbers.size() || carry; ++j) {
+        long long cur = c[i+j] + numbers[i] * 1ll * (j < (int)b.numbers.size() ? b.numbers[j] : 0) + carry;
+        c.numbers[i+j] = (cur % base);
+        carry = int (cur / base);
+      }
+    while (c.numbers.back() == 0 && c.numbers.size() > 1)
+      c.numbers.pop_back();
+    *this = c;
+    if (numbers.back() == 0) {
+      isNegative = false;
+    }
+    return *this;
+  }
+  explicit operator int() const {
+    long long x = 0;
+    if (numbers.size() > 1) {
+      x = numbers[1] * base + numbers[0];
+    } else {
+      x = numbers[0];
+    }
+    if (isNegative) {
+      x = -x;
+    }
+    return (int)x;
+  }
+  explicit operator bool() const {
+    if (numbers.back() == 0) {
+      return false;
+    }
+    return true;
+  }
+  BigInteger& operator++() {
+    *this += 1;
+    return *this;
+  }
+  BigInteger& operator--() {
+    *this -= 1;
+    return *this;
+  }
+  BigInteger operator++(int) {
+    BigInteger copy = *this;
+    ++*this;
+    return copy;
+  }
+  BigInteger operator--(int) {
+    BigInteger copy = *this;
+    --*this;
+    return copy;
+  }
+  BigInteger operator-() {
+    BigInteger n1 = *this;
+    if (numbers.back() != 0) {
+      n1.isNegative = !n1.isNegative;
+    }
+    return n1;
+  }
+  BigInteger& operator /=(const BigInteger& right) {
+    if (numbers.back() == 0) {
+      return *this;
+    }
+    bool a = isNegative;
+    isNegative = false;
+    BigInteger b = right;
+    b.isNegative = false;
+    BigInteger result, current;
+    result.numbers.resize(numbers.size());
+    for (long long i = static_cast<long long>(numbers.size()) - 1; i >= 0; --i) {
+      current.shift_right();
+      current.numbers[0] = numbers[i];
+      while (current.numbers.size() > 1 && current.numbers.back() == 0) {
+        current.numbers.pop_back();
+      }
+      int x = 0, l = 0, r = base;
+      while (l <= r) {
+        int m = (l + r) / 2;
+        BigInteger d = b;
+        d *= m;
+        d -= current;
+        if (d.isNegative == 1 || d.numbers.back() == 0) {
+          x = m;
+          l = m + 1;
+        } else r = m - 1;
+      }
+      result.numbers[i] = x;
+      BigInteger f = b;
+      f *= x;
+      current -= f;
+    }
+    while (result.numbers.size() > 1 && result.numbers.back() == 0)
+      result.numbers.pop_back();
+    *this = result;
+    if (a != right.isNegative) {
+      isNegative = true;
+    } else {
+      isNegative = false;
+    }
+    if (numbers.back() == 0) {
+      isNegative = false;
+    }
+    return *this;
+  }
+  BigInteger& operator%=(const BigInteger& right) {
+    BigInteger c = *this;
+    c /= right;
+    c *= right;
+    *this -= c;
+    return *this;
+  }
+  std::string toString() {
+    std::string s;
+    if (isNegative) {
+      s += '-';
+    }
+    s += std::to_string(numbers.back());
+    if (numbers.size() == 1) {
+      return s;
+    }
+    for (int i = (int) numbers.size() - 2; i >= 0; --i) {
+      int j = numbers[i], f = 0;
+      while (j > 0) {
+        f += 1;
+        j /= 10;
+      }
+      f = 9 - f;
+      if (numbers[i] == 0) {
+        f -= 1;
+      }
+      while (f > 0) {
+        s += "0";
+        f -= 1;
+      }
+      s += std::to_string(numbers[i]);
+    }
+    return s;
+  }
+  BigInteger(const std::string& cin) {
+    int sign = 0;
+    if (cin[0] == '-') {
+      sign = 1;
+    }
+    long long j = (cin.length() - sign) % 9;
+    *this += atoi(cin.substr(sign, j).c_str());
+    *this *= 1000000000;
+    for (size_t i = j + sign; i < cin.length(); i += 9) {
+      if (i + 9 >= cin.length()) {
+        *this += atoi(cin.substr(i, cin.length() - i).c_str());
+        *this *= 1000000000;
+      } else {
+        *this += atoi(cin.substr(i, 9).c_str());
+        *this *= 1000000000;
+      }
+    }
+    *this /= 1000000000;
+    if (cin[0] == '-') {
+      isNegative = true;
+    }
+  }
+  size_t size() const {
+    return numbers.size();
+  }
+  size_t sign() const {
+    int n = isNegative;
+    return n;
+  }
+  int operator[](size_t index) const{
+    return (int)numbers[index];
+  }
+};
+BigInteger operator+(const BigInteger& n1, const BigInteger& n2) {
+  BigInteger n = n1;
+  n += n2;
+  return n;
+}
+BigInteger operator-(const BigInteger& n1, const BigInteger& n2) {
+  BigInteger n = n1;
+  n -= n2;
+  return n;
+}
+BigInteger operator*(const BigInteger& n1, const BigInteger& n2) {
+  BigInteger n = n1;
+  n *= n2;
+  return n;
+}
+BigInteger operator/(const BigInteger& n1, const BigInteger& n2) {
+  BigInteger n = n1;
+  n /= n2;
+  return n;
+}
+BigInteger operator%(const BigInteger& n1, const BigInteger& n2) {
+  BigInteger n = n1;
+  n %= n2;
+  return n;
+}
+bool operator==(const BigInteger& n1, const BigInteger&n2) {
+  BigInteger n = n1;
+  n -= n2;
+  if (n[0] == 0 && n.size() == 1) {
+    return true;
+  }
+  return false;
+}
+bool operator!=(const BigInteger& n1, const BigInteger&n2) {
+  if (n1==n2) {
+    return false;
+  }
+  return true;
+}
+bool operator>(const BigInteger& n1, const BigInteger&n2) {
+  BigInteger n = n1;
+  n -= n2;
+  if (n.sign() == 0 && n1 != n2) {
+    return true;
+  }
+  return false;
+}
+bool operator<(const BigInteger& n1, const BigInteger&n2) {
+  if (n1 != n2 && !(n1 > n2)) {
+    return true;
+  }
+  return false;
+}
+bool operator>=(const BigInteger& n1, const BigInteger&n2) {
+  if (n1==n2 || n1>n2) {
+    return true;
+  }
+  return false;
+}
+bool operator<=(const BigInteger& n1, const BigInteger&n2) {
+  if (n1==n2 || n1<n2) {
+    return true;
+  }
+  return false;
+}
+std::ostream& operator<<(std::ostream& out, const BigInteger& n) {
+  if (n.sign() == 1) {
+    out << '-';
+  }
+  out << n[n.size() - 1];
+  if (n.size() == 1) {
+    return out;
+  }
+  for (int i = (int) n.size() - 2; i >= 0; --i) {
+    int j = n[i], f = 0;
+    while (j > 0) {
+      f += 1;
+      j /= 10;
+    }
+    f = 9 - f;
+    if (n[i] == 0) {
+      f -= 1;
+    }
+    while (f > 0) {
+      out << "0";
+      f -= 1;
+    }
+    out << n[i];
+  }
+  return out;
+}
+std::istream& operator>>(std::istream& in, BigInteger& s) {
+  s = 0;
+  int sign = 0;
+  std::string cin;
+  in >> cin;
+  if (cin[0] == '-') {
+    sign = 1;
+  }
+  int j = (cin.length() - sign) % 9;
+  s += atoi(cin.substr(sign, j).c_str());
+  s *= 1000000000;
+  for (size_t i = j + sign; i < cin.length(); i += 9) {
+    if (i + 9 >= cin.length()) {
+      s += atoi(cin.substr(i, cin.length() - i).c_str());
+      s *= 1000000000;
+    } else {
+      s += atoi(cin.substr(i, 9).c_str());
+      s *= 1000000000;
+    }
+  }
+  s /= 1000000000;
+  if (cin[0] == '-') {
+    s = -s;
+  }
+  return in;
+}
+BigInteger operator""_bi (const char* n, size_t sz) {
+  BigInteger s = 0;
+  int sign = 0;
+  std::string cin;
+  for (size_t i = 0; i < sz; ++i) {
+    cin += n[i];
+  }
+  if (cin[0] == '-') {
+    sign = 1;
+  }
+  int j = (int)(cin.length() - sign) % 9;
+  s += atoi(cin.substr(sign, j).c_str());
+  s *= 1000000000;
+  for (size_t i = j + sign; i < cin.length(); i += 9) {
+    if (i + 9 >= cin.length()) {
+      s += atoi(cin.substr(i, cin.length() - i).c_str());
+      s *= 1000000000;
+    } else {
+      s += atoi(cin.substr(i, 9).c_str());
+      s *= 1000000000;
+    }
+  }
+  s /= 1000000000;
+  if (cin[0] == '-') {
+    s = -s;
+  }
+  return s;
+}
+BigInteger operator""_bi (unsigned long long n) {
+  BigInteger a = 0;
+  std::vector<int> x;
+  while (n > 0) {
+    x.insert(x.begin(), n % 1000000000);
+    n = n / 1000000000;
+  }
+  for (size_t i = 0; i < x.size(); ++i) {
+    a += x[i];
+    a *= 1000000000;
+  }
+  a /= 1000000000;
+  return a;
+}
+class Rational{
+ private:
+  BigInteger numerator = 0;
+  BigInteger denominator = 1;
+ public:
+  Rational() = default;
+  Rational(int n): numerator(n) {};
+  Rational(int n, int s): numerator(n), denominator(s) {
+    if (s < 0) {
+      numerator = -numerator;
+      denominator = -denominator;
+    }
+    BigInteger numerator1 = numerator;
+    BigInteger denominator1 = denominator;
+    if (numerator1 < 0) {
+      numerator1 = -numerator1;
+    }
+    while (numerator1 > 0 && denominator1 > 0) {
+      if (numerator1 >= denominator1) {
+        numerator1 %= denominator1;
+      } else {
+        denominator1 %= numerator1;
+      }
+    }
+    BigInteger a = (numerator1 != 0 ? numerator1: denominator1);
+    numerator /= a;
+    denominator /= a;
+  };
+  Rational(const BigInteger& n): numerator(n) {};
+  Rational(const BigInteger& n, const BigInteger& s): numerator(n), denominator(s) {
+    if (s < 0) {
+      numerator = -numerator;
+      denominator = -denominator;
+    }
+    BigInteger numerator1 = numerator;
+    BigInteger denominator1 = denominator;
+    if (numerator1 < 0) {
+      numerator1 = -numerator1;
+    }
+    while (numerator1 > 0 && denominator1 > 0) {
+      if (numerator1 >= denominator1) {
+        numerator1 %= denominator1;
+      } else {
+        denominator1 %= numerator1;
+      }
+    }
+    BigInteger a = (numerator1 != 0 ? numerator1: denominator1);
+    numerator /= a;
+    denominator /= a;
+  };
+  Rational(const Rational& n) {
+    numerator = n.numerator;
+    denominator = n.denominator;
+  };
+  void swap(Rational& s) {
+    std::swap(numerator, s.numerator);
+    std::swap(denominator, s.denominator);
+  }
+  Rational& operator=(const Rational& n) {
+    Rational copy = n;
+    swap(copy);
+    return *this;
+  }
+  BigInteger gcd() {
+    Rational s = 0;
+    s.numerator = this->numerator;
+    s.denominator = this->denominator;
+    if (s.numerator < 0) {
+      s.numerator = -s.numerator;
+    }
+    if (s.denominator < 0) {
+      s.denominator = -s.denominator;
+    }
+    while (s.numerator > 0 && s.denominator > 0) {
+      if (s.numerator >= s.denominator) {
+        s.numerator %= s.denominator;
+      } else {
+        s.denominator %= s.numerator;
+      }
+    }
+    BigInteger a = (s.numerator != 0 ? s.numerator: s.denominator);
+    return a;
+  }
+  Rational& operator+=(const Rational& n) {
+    numerator = numerator * n.denominator + n.numerator * denominator;
+    denominator *= n.denominator;
+    BigInteger a = this->gcd();
+    numerator /= a;
+    denominator /= a;
+    return *this;
+  }
+  Rational& operator-=(const Rational& n) {
+    numerator = numerator * n.denominator - n.numerator * denominator;
+    denominator *= n.denominator;
+    BigInteger a = this->gcd();
+    numerator /= a;
+    denominator /= a;
+    return *this;
+  }
+  Rational& operator*=(const Rational& n) {
+    numerator *= n.numerator;
+    denominator *= n.denominator;
+    BigInteger a = this->gcd();
+    numerator /= a;
+    denominator /= a;
+    return *this;
+  }
+  Rational& operator/=(const Rational& n) {
+    numerator *= n.denominator;
+    denominator *= n.numerator;
+    BigInteger a = this->gcd();
+    numerator /= a;
+    denominator /= a;
+    return *this;
+  }
+  bool isZero() const {
+    return (numerator == 0);
+  }
+  bool sign() const {
+    return ((numerator < 0 && denominator > 0) || (numerator > 0 && denominator < 0));
+  }
+  std::string toString() {
+    std::string s;
+    if (denominator < 0) {
+      numerator =- numerator;
+      denominator = -denominator;
+    }
+    s = numerator.toString();
+    if (denominator > 1) {
+      s += '/';
+      s += denominator.toString();
+    }
+    return s;
+  }
+  std::string asDecimal(int precision = 0) const {
+    if (numerator == 0) {
+      return "0";
+    }
+    std::string s;
+    BigInteger a = numerator / denominator;
+    if (a == 0) {
+      if ((numerator < 0 && denominator > 0) || (numerator > 0 && denominator <0)) {
+        s += "-";
+      }
+    }
+    s += a.toString();
+    BigInteger b = numerator;
+    if (numerator < 0) {
+      b = -b;
+    }
+    b %= denominator;
+    if (precision > 0) {
+      s += ".";
+    }
+    while (precision > 0) {
+      b *= 10;
+      s += (b / denominator).toString();
+      b -= (b/denominator) * denominator;
+      precision -= 1;
+    }
+    return s;
+  }
+  explicit operator double() const {
+    return std::stod(asDecimal(16));
+  }
+};
+Rational operator+(const Rational& n1, const Rational& n2) {
+  Rational n = n1;
+  n += n2;
+  return n;
+}
+Rational operator-(const Rational& n1, const Rational& n2) {
+  Rational n = n1;
+  n -= n2;
+  return n;
+}
+Rational operator*(const Rational& n1, const Rational& n2) {
+  Rational n = n1;
+  n *= n2;
+  return n;
+}
+Rational operator/(const Rational& n1, const Rational& n2) {
+  Rational n = n1;
+  n /= n2;
+  return n;
+}
+bool operator==(const Rational& n1, const Rational& n2) {
+  Rational n = n1 - n2;
+  if (n.isZero()) {
+    return true;
+  }
+  return false;
+}
+bool operator!=(const Rational& n1, const Rational& n2) {
+  if (n1 == n2) {
+    return false;
+  }
+  return true;
+}
+bool operator>(const Rational& n1, const Rational& n2) {
+  Rational n = n1 - n2;
+  if (n.sign() || n == 0) {
+    return false;
+  }
+  return true;
+}
+bool operator<(const Rational& n1, const Rational& n2) {
+  if (n1 > n2 || n1 == n2) {
+    return false;
+  }
+  return true;
+}
+bool operator>=(const Rational& n1, const Rational& n2) {
+  if (n1 > n2 || n1 == n2) {
+    return true;
+  }
+  return false;
+}
+bool operator<=(const Rational& n1, const Rational& n2) {
+  if (n1 < n2 || n1 == n2) {
+    return true;
+  }
+  return false;
+}
+Rational operator-(const Rational& n) {
+  Rational a = 0;
+  a -= n;
+  return a;
+}
+std::ostream& operator<<(std::ostream& out, const Rational& n) {
+  Rational s = n;
+  out << s.toString();
+  return out;
+}
